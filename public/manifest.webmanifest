@@ -1,0 +1,18 @@
+{
+  "name": "しごとボード",
+  "short_name": "しごとボード",
+  "description": "鉄道の発車標モチーフの業務アシスタント。会議メモの構造化・ToDo発車標・振り返り生成。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F2F4F3",
+  "theme_color": "#0B7A45",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

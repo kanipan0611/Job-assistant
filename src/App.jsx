@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { C, FONT, MONO, LINES } from "./theme.js";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { C, FONT, MONO, LINES, btnStyle, btnGhost } from "./theme.js";
 import { loadData, saveData, loadSettings, todayStr } from "./storage.js";
+import { registerSendConfirmer } from "./api.js";
 import Today from "./views/Today.jsx";
 import Intake from "./views/Intake.jsx";
 import Archive from "./views/Archive.jsx";
@@ -100,21 +101,84 @@ function LineTabs({ tab, setTab }) {
   );
 }
 
+// 送信前プレビュー（マスキング後の全文を承認するまで送信されない）
+function SendGate({ req }) {
+  if (!req) return null;
+  const parts = req.masked.split(/(【[^】]{1,20}】)/g);
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,22,28,0.55)",
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+      }}
+    >
+      <div style={{ background: "#fff", borderRadius: 14, maxWidth: 560, width: "100%", maxHeight: "80vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ background: C.board, color: C.amber, fontFamily: MONO, fontSize: 12, letterSpacing: 2, padding: "10px 16px" }}>
+          出発前点検 ── 送信内容の確認
+        </div>
+        <div style={{ padding: "12px 16px", fontSize: 12, color: C.sub, borderBottom: `1px solid ${C.line}` }}>
+          以下の内容が Anthropic API に送信されます（{req.count > 0 ? `固有名詞など ${req.count} 件を伏せ字化済み。対応表は端末外に出ません` : "伏せ字対象は見つかりませんでした"}）。
+          機密が残っていないか確認してください。キャンセルすれば何も送信されません。
+        </div>
+        <div style={{ overflowY: "auto", padding: 16, fontSize: 12, lineHeight: 1.8, color: C.ink, whiteSpace: "pre-wrap", fontFamily: MONO, flex: 1 }}>
+          {parts.map((p, i) =>
+            /^【[^】]+】$/.test(p) ? (
+              <mark key={i} style={{ background: "#FFE9A8", borderRadius: 4, padding: "0 2px" }}>{p}</mark>
+            ) : (
+              <span key={i}>{p}</span>
+            ),
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: 12, borderTop: `1px solid ${C.line}` }}>
+          <button onClick={() => req.resolve(false)} style={btnGhost}>キャンセル</button>
+          <button onClick={() => req.resolve(true)} style={btnStyle}>この内容で送信</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [data, setDataState] = useState(null);
   const [tab, setTab] = useState("today");
   const [saveErr, setSaveErr] = useState(false);
   const [draftPrefill, setDraftPrefill] = useState(null);
   const [hasKey, setHasKey] = useState(true);
+  const [offline, setOffline] = useState(false);
+  const [sendReq, setSendReq] = useState(null);
+  const sendReqRef = useRef(null);
 
   useEffect(() => {
     setDataState(loadData());
     setHasKey(Boolean(loadSettings().apiKey));
+    setOffline(Boolean(loadSettings().aiDisabled));
+    registerSendConfirmer(({ masked, count }) => {
+      return new Promise((resolve) => {
+        const req = {
+          masked,
+          count,
+          resolve: (ok) => {
+            setSendReq(null);
+            sendReqRef.current = null;
+            resolve(ok);
+          },
+        };
+        sendReqRef.current = req;
+        setSendReq(req);
+      });
+    });
   }, []);
 
   useEffect(() => {
     if (tab === "settings") return;
     setHasKey(Boolean(loadSettings().apiKey));
+    setOffline(Boolean(loadSettings().aiDisabled));
   }, [tab]);
 
   const setData = useCallback((next) => {
@@ -152,7 +216,24 @@ export default function App() {
         <StationSign openCount={openCount} />
         <LineTabs tab={tab} setTab={setTab} />
 
-        {!hasKey && tab !== "settings" && (
+        {offline && tab !== "settings" && (
+          <div
+            style={{
+              background: C.greenSoft,
+              border: `1px solid ${C.green}`,
+              borderRadius: 10,
+              padding: "8px 12px",
+              fontSize: 12,
+              color: C.green,
+              marginBottom: 12,
+              fontWeight: 700,
+            }}
+          >
+            ● 完全オフラインモード運行中 ── 外部への送信は一切行いません（AI機能は停止中）
+          </div>
+        )}
+
+        {!hasKey && !offline && tab !== "settings" && (
           <div
             style={{
               background: "#FFF7E0",
@@ -196,6 +277,7 @@ export default function App() {
           ─── 本日もご安全に ───
         </div>
       </div>
+      <SendGate req={sendReq} />
     </div>
   );
 }

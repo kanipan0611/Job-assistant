@@ -74,6 +74,49 @@ export default function Settings({ data, setData }) {
         ))}
       </select>
 
+      <div style={sectionLabel}>プライバシー（漏洩対策）</div>
+      <div style={{ ...cardStyle, padding: 14 }}>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: C.ink, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={settings.aiDisabled}
+            onChange={(e) => setSettings({ ...settings, aiDisabled: e.target.checked })}
+            style={{ marginTop: 3 }}
+          />
+          <span>
+            <b>完全オフラインモード</b>
+            <span style={{ display: "block", fontSize: 12, color: C.sub }}>
+              AIへの送信を一切遮断します。タスク管理・日誌・検索など、AI以外の機能はすべて使えます。漏洩を確実にゼロにしたい場合はこちら。
+            </span>
+          </span>
+        </label>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: C.ink, cursor: "pointer", marginTop: 12 }}>
+          <input
+            type="checkbox"
+            checked={settings.confirmBeforeSend !== false}
+            onChange={(e) => setSettings({ ...settings, confirmBeforeSend: e.target.checked })}
+            style={{ marginTop: 3 }}
+          />
+          <span>
+            <b>送信前に必ず内容を確認する（推奨）</b>
+            <span style={{ display: "block", fontSize: 12, color: C.sub }}>
+              AIに送る直前に、マスキング後の全文をプレビューします。承認しない限り1文字も送信されません。
+            </span>
+          </span>
+        </label>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginTop: 14 }}>必ず伏せる語（NGワード辞書）</div>
+        <div style={{ fontSize: 12, color: C.sub, margin: "4px 0 6px" }}>
+          顧客名・案件名など、絶対に社外へ出したくない語を1行に1つ。送信前に自動で【NG1】等に置き換わり、AIの回答内では元に戻ります。人物ノートに登録した名前も自動で伏せられます。
+        </div>
+        <textarea
+          value={settings.ngWords}
+          onChange={(e) => setSettings({ ...settings, ngWords: e.target.value })}
+          placeholder={"例）\n○○商事\nプロジェクトあかつき"}
+          rows={4}
+          style={{ ...inputStyle, width: "100%", lineHeight: 1.6, resize: "vertical" }}
+        />
+      </div>
+
       <div style={{ marginTop: 14 }}>
         <button onClick={save} style={btnStyle}>{saved ? "保存しました" : "保存"}</button>
       </div>

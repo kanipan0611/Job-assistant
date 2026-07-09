@@ -7,3 +7,10 @@ createRoot(document.getElementById("root")).render(
     <App />
   </React.StrictMode>,
 );
+
+// PWA: httpsで配信されたときのみサービスワーカーを登録（file://の単一ファイル利用では何もしない）
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}

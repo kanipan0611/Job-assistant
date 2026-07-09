@@ -33,14 +33,22 @@ export function saveData(data) {
   }
 }
 
+export const defaultSettings = () => ({
+  apiKey: "",
+  model: "claude-opus-4-8",
+  aiDisabled: false, // 完全オフラインモード（AI送信を遮断）
+  confirmBeforeSend: true, // 送信前プレビューを必須にする
+  ngWords: "", // 必ず伏せる語（1行1語）
+});
+
 export function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return { ...defaultSettings(), ...JSON.parse(raw) };
   } catch (e) {
     /* ignore */
   }
-  return { apiKey: "", model: "claude-opus-4-8" };
+  return defaultSettings();
 }
 
 export function saveSettings(s) {

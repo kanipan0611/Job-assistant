@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { loadSettings, todayStr, daysAgoStr } from "./storage.js";
+import { loadSettings, loadData, todayStr, daysAgoStr } from "./storage.js";
+import { buildDict, maskText, unmaskText, unmaskDeep } from "./privacy.js";
 
 // ブラウザから直接 Claude API を呼ぶ（APIキーは端末のlocalStorageにのみ保存）
 function getClient() {
@@ -21,33 +22,65 @@ function firstText(response) {
   return block ? block.text.trim() : "";
 }
 
+// ---------- 送信ゲート（漏洩対策の中核） ----------
+// すべてのAI送信はここを通る:
+// 1. 完全オフラインモードなら即拒否（何も送らない）
+// 2. 端末内で固有名詞・金額・連絡先をマスキング
+// 3. ユーザーが送信内容をプレビューして承認しない限り送信しない
+let sendConfirmer = null;
+export function registerSendConfirmer(fn) {
+  sendConfirmer = fn;
+}
+
+const PLACEHOLDER_NOTE =
+  "\n\n文中の【人物1】【会社1】【金額1】のような【…】は機密保護のための伏せ字プレースホルダです。固有名詞として扱い、出力でも一切変更せずそのまま使ってください。";
+
+async function guardPrompt(prompt) {
+  const settings = loadSettings();
+  if (settings.aiDisabled) {
+    throw new Error(
+      "完全オフラインモード中のため送信しません。設定タブで解除できます。",
+    );
+  }
+  const dict = buildDict(settings.ngWords, loadData().notes);
+  const { masked, mapping, count } = maskText(prompt, dict);
+  if (settings.confirmBeforeSend !== false) {
+    if (!sendConfirmer) throw new Error("送信確認画面を初期化できませんでした。");
+    const ok = await sendConfirmer({ masked, count });
+    if (!ok) throw new Error("送信をキャンセルしました。");
+  }
+  return { masked, mapping, hasMask: count > 0 };
+}
+
 async function createText({ system, prompt, maxTokens = 2048 }) {
+  const { masked, mapping, hasMask } = await guardPrompt(prompt);
   const client = getClient();
   const response = await client.messages.create({
     model: getModel(),
     max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content: prompt }],
+    system: hasMask ? system + PLACEHOLDER_NOTE : system,
+    messages: [{ role: "user", content: masked }],
   });
   if (response.stop_reason === "refusal") {
     throw new Error("生成が拒否されました。内容を変えてお試しください。");
   }
-  return firstText(response);
+  return unmaskText(firstText(response), mapping);
 }
 
 async function createJson({ system, prompt, schema, maxTokens = 3000 }) {
+  const { masked, mapping, hasMask } = await guardPrompt(prompt);
   const client = getClient();
   const response = await client.messages.create({
     model: getModel(),
     max_tokens: maxTokens,
-    system,
+    system: hasMask ? system + PLACEHOLDER_NOTE : system,
     output_config: { format: { type: "json_schema", schema } },
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: masked }],
   });
   if (response.stop_reason === "refusal") {
     throw new Error("生成が拒否されました。内容を変えてお試しください。");
   }
-  return JSON.parse(firstText(response));
+  return unmaskDeep(JSON.parse(firstText(response)), mapping);
 }
 
 const str = { type: "string" };
